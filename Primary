@@ -1,0 +1,198 @@
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+
+def area_ratio_from_mach(M, gamma=1.4):
+    """
+    Calculate the area ratio (A/A*) from the Mach number for isentropic flow.
+    
+    Parameters:
+    M (float): Mach number
+    gamma (float): Ratio of specific heats (default: 1.4 for air)
+    
+    Returns:
+    float: Area ratio (A/A*)
+    """
+    term1 = 2 / (gamma + 1)
+    term2 = 1 + ((gamma - 1) / 2) * M**2
+    
+    # The isentropic area ratio equation
+    area_ratio = (1 / M) * (term1 * term2)**((gamma + 1) / (2 * (gamma - 1)))
+    
+    return area_ratio
+
+def mach_from_area_ratio(area_ratio, gamma=1.4, subsonic=False, tol=1e-8, max_iter=1000):
+    """
+    Calculate the Mach number from the area ratio (A/A*) using an iterative method.
+    
+    Parameters:
+    area_ratio (float): Area ratio (A/A*)
+    gamma (float): Ratio of specific heats (default: 1.4 for air)
+    subsonic (bool): If True, return subsonic solution; if False, return supersonic solution
+    tol (float): Tolerance for convergence
+    max_iter (int): Maximum number of iterations
+    
+    Returns:
+    float: Mach number
+    """
+    if area_ratio < 1.0:
+        # Only subsonic solution exists for A/A* < 1
+        subsonic = True
+    
+    # Initial guess for Mach number
+    if subsonic:
+        M = 0.5  # Initial guess for subsonic
+    else:
+        M = 2.0  # Initial guess for supersonic
+    
+    # Newton-Raphson iteration
+    for i in range(max_iter):
+        current_area_ratio = area_ratio_from_mach(M, gamma)
+        error = current_area_ratio - area_ratio
+        
+        if abs(error) < tol:
+            return M
+        
+        # Derivative of area ratio with respect to Mach number (approximated numerically)
+        delta = 1e-6
+        derivative = (area_ratio_from_mach(M + delta, gamma) - current_area_ratio) / delta
+        
+        # Update Mach number
+        M = M - error / derivative
+        
+        # Ensure M stays in valid range
+        if subsonic:
+            M = max(0.01, min(1.0, M))
+        else:
+            M = max(1.0, M)
+    
+    # If we reached max_iter without converging
+    print(f"Warning: Did not converge after {max_iter} iterations. Last M = {M}")
+    return M
+
+def pressure_ratio_from_mach(M, gamma=1.4):
+    """
+    Calculate the pressure ratio (P/P*) from the Mach number.
+    
+    Parameters:
+    M (float): Mach number
+    gamma (float): Ratio of specific heats (default: 1.4 for air)
+    
+    Returns:
+    float: Pressure ratio (P/P*)
+    """
+    term = 1 + ((gamma - 1) / 2) * M**2
+    pressure_ratio = term**(-gamma / (gamma - 1))
+    
+    return pressure_ratio
+
+def plot_relations(mach_range=(0.1, 5), gamma=1.4):
+    """
+    Plot the area ratio and pressure ratio as functions of Mach number.
+    
+    Parameters:
+    mach_range (tuple): Range of Mach numbers to plot (min, max)
+    gamma (float): Ratio of specific heats
+    """
+    mach_values = np.linspace(mach_range[0], mach_range[1], 500)
+    area_ratios = [area_ratio_from_mach(M, gamma) for M in mach_values]
+    pressure_ratios = [pressure_ratio_from_mach(M, gamma) for M in mach_values]
+    
+    plt.figure(figsize=(12, 8))
+    
+    # Plot area ratio
+    plt.subplot(2, 1, 1)
+    plt.plot(mach_values, area_ratios, 'b-', linewidth=2)
+    plt.grid(True)
+    plt.xlabel('Mach Number (M)')
+    plt.ylabel('Area Ratio (A/A*)')
+    plt.title(f'Area Ratio vs Mach Number (γ = {gamma})')
+    plt.axhline(y=1, color='r', linestyle='--')  # Throat line
+    plt.axvline(x=1, color='r', linestyle='--')  # Sonic line
+    
+    # Plot pressure ratio
+    plt.subplot(2, 1, 2)
+    plt.plot(mach_values, pressure_ratios, 'g-', linewidth=2)
+    plt.grid(True)
+    plt.xlabel('Mach Number (M)')
+    plt.ylabel('Pressure Ratio (P/P*)')
+    plt.title(f'Pressure Ratio vs Mach Number (γ = {gamma})')
+    plt.axvline(x=1, color='r', linestyle='--')  # Sonic line
+    
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    """
+    Main function to interact with the user.
+    """
+    print("Nozzle Area Ratio Calculator")
+    print("============================")
+    
+    while True:
+        print("\nOptions:")
+        print("1. Calculate Area Ratio (A/A*) from Mach Number")
+        print("2. Calculate Mach Number from Area Ratio (A/A*)")
+        print("3. Calculate Pressure Ratio (P/P*) from Mach Number")
+        print("4. Plot Area Ratio and Pressure Ratio vs Mach Number")
+        print("5. Exit")
+        
+        choice = input("\nEnter your choice (1-5): ")
+        
+        if choice == '1':
+            try:
+                mach = float(input("Enter Mach number: "))
+                gamma = float(input("Enter specific heat ratio (default = 1.4): ") or 1.4)
+                
+                area_ratio = area_ratio_from_mach(mach, gamma)
+                print(f"\nFor M = {mach}, Area Ratio (A/A*) = {area_ratio:.6f}")
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+        
+        elif choice == '2':
+            try:
+                area_ratio = float(input("Enter Area Ratio (A/A*): "))
+                gamma = float(input("Enter specific heat ratio (default = 1.4): ") or 1.4)
+                
+                if area_ratio < 1.0:
+                    mach = mach_from_area_ratio(area_ratio, gamma, subsonic=True)
+                    print(f"\nFor A/A* = {area_ratio}, Mach Number (subsonic) = {mach:.6f}")
+                else:
+                    flow_type = input("Subsonic or supersonic flow? (sub/super): ").lower()
+                    subsonic = flow_type.startswith('sub')
+                    
+                    mach = mach_from_area_ratio(area_ratio, gamma, subsonic=subsonic)
+                    flow_regime = "subsonic" if subsonic else "supersonic"
+                    print(f"\nFor A/A* = {area_ratio}, Mach Number ({flow_regime}) = {mach:.6f}")
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+        
+        elif choice == '3':
+            try:
+                mach = float(input("Enter Mach number: "))
+                gamma = float(input("Enter specific heat ratio (default = 1.4): ") or 1.4)
+                
+                pressure_ratio = pressure_ratio_from_mach(mach, gamma)
+                print(f"\nFor M = {mach}, Pressure Ratio (P/P*) = {pressure_ratio:.6f}")
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+        
+        elif choice == '4':
+            try:
+                min_mach = float(input("Enter minimum Mach number (default = 0.1): ") or 0.1)
+                max_mach = float(input("Enter maximum Mach number (default = 5.0): ") or 5.0)
+                gamma = float(input("Enter specific heat ratio (default = 1.4): ") or 1.4)
+                
+                plot_relations((min_mach, max_mach), gamma)
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+        
+        elif choice == '5':
+            print("Exiting program. Goodbye!")
+            break
+        
+        else:
+            print("Invalid choice. Please enter a number between 1 and 5.")
+
+if __name__ == "__main__":
+    main()
